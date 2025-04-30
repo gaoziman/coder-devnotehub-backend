@@ -26,7 +26,7 @@ server:
 spring:
   application:
     # 应用名称
-    name: coder-gallery-backend
+    name: coder-devnotehub
   profiles:
     active: local
 

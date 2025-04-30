@@ -77,6 +77,13 @@
             <optional>true</optional>
         </dependency>
 
+        <!--spring-test 库  -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-test</artifactId>
+            <scope>compile</scope>
+        </dependency>
+
         <!-- Spring Boot测试：提供单元测试和集成测试支持 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
