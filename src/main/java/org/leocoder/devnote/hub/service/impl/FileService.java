@@ -9,7 +9,7 @@ import java.io.InputStream;
  * @author : 程序员Leo
  * @version 1.0
  * @date 2025-04-07
- * @description :
+ * @description : 文件服务接口
  */
 
 public interface FileService {
@@ -17,45 +17,77 @@ public interface FileService {
     /**
      * 上传文件
      *
-     * @param file         要上传的文件
-     * @param fileCategory 文件分类/文件夹
-     * @return 文件上传响应
+     * @param file     上传的文件
+     * @param mimeType 文件MIME类型
+     * @return 文件上传响应对象
      */
-    FileUploadVO uploadFile(MultipartFile file, String fileCategory);
+    FileUploadVO uploadFile(MultipartFile file, String mimeType);
 
     /**
-     * 通过文件键获取文件
+     * 上传图片
      *
-     * @param fileKey 文件标识符
-     * @return 文件输入流
+     * @param file 图片文件
+     * @return 文件上传响应对象
      */
-    InputStream getFile(String fileKey);
+    FileUploadVO uploadImage(MultipartFile file);
 
     /**
-     * 通过文件键删除文件
+     * 上传文档
      *
-     * @param fileKey 文件标识符
+     * @param file 文档文件
+     * @return 文件上传响应对象
      */
-    void deleteFile(String fileKey);
+    FileUploadVO uploadDocument(MultipartFile file);
 
     /**
-     * 生成文件访问URL
+     * 上传视频
      *
-     * @param fileKey 文件标识符
-     * @return 可访问URL字符串
+     * @param file 视频文件
+     * @return 文件上传响应对象
      */
-    String getPresignedUrl(String fileKey);
+    FileUploadVO uploadVideo(MultipartFile file);
 
     /**
-     * 初始化存储桶
-     */
-    void initBucket();
-
-
-    /**
-     * 获取 MinIO 服务端点
+     * 通过InputStream上传文件
      *
-     * @return MinIO 服务端点 URL
+     * @param inputStream 输入流
+     * @param fileName    文件名
+     * @param contentType 内容类型
+     * @param size        文件大小
+     * @return 文件上传响应对象
+     */
+    FileUploadVO uploadFile(InputStream inputStream, String fileName, String contentType, long size);
+
+    /**
+     * 删除文件
+     *
+     * @param objectName 对象名称
+     * @return 是否删除成功
+     */
+    boolean deleteFile(String objectName);
+
+    /**
+     * 获取文件访问URL
+     *
+     * @param objectName 对象名称
+     * @param expiry     过期时间(秒)，-1表示永不过期
+     * @return 文件访问URL
+     */
+    String getFileUrl(String objectName, int expiry);
+
+    /**
+     * 检查文件是否存在
+     *
+     * @param objectName 对象名称
+     * @return 是否存在
+     */
+    boolean isFileExist(String objectName);
+
+
+    /**
+     * 获取MinIO服务端点URL
+     *
+     * @return MinIO端点URL
      */
     String getMinioEndpoint();
 }

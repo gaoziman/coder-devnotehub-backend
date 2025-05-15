@@ -10,31 +10,49 @@ import lombok.NoArgsConstructor;
 /**
  * @author : 程序员Leo
  * @version 1.0
- * @date 2025-05-01 01:57
- * @description :
+ * @date 2025-05-01 02:10
+ * @description : 文件上传响应VO
  */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@ApiModel(value = "文件上传VO")
+@ApiModel("文件上传响应")
 public class FileUploadVO {
 
-    @ApiModelProperty(value = "原始文件名")
-    private String filename;
+    /**
+     * 文件名
+     */
+    @ApiModelProperty("原始文件名")
+    private String originalFilename;
 
-    @ApiModelProperty(value = "文件存储键/路径")
-    private String fileKey;
+    /**
+     * 文件大小(字节)
+     */
+    @ApiModelProperty("文件大小(字节)")
+    private Long size;
 
-    @ApiModelProperty(value = "文件大小(字节)")
-    private long fileSize;
+    /**
+     * 文件类型
+     */
+    @ApiModelProperty("文件类型")
+    private String contentType;
 
-    @ApiModelProperty(value = "文件MIME类型")
-    private String fileType;
+    /**
+     * 存储路径
+     */
+    @ApiModelProperty("存储路径")
+    private String objectName;
 
-    @ApiModelProperty(value = "预签名访问URL")
+    /**
+     * 访问URL
+     */
+    @ApiModelProperty("访问URL")
     private String url;
 
-    @ApiModelProperty(value = "上传时间")
-    private String uploadTime;
+    /**
+     * 文件扩展名
+     */
+    @ApiModelProperty("文件扩展名")
+    private String extension;
 }

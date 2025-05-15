@@ -14,6 +14,7 @@ public enum ErrorCode {
     SUCCESS(200, "success"),
 
     PARAMS_ERROR(40000, "请求参数错误"),
+    PARAMETER_ERROR(40001, "参数校验失败"),
 
     NOT_LOGIN_ERROR(40100, "未登录"),
 
@@ -26,6 +27,10 @@ public enum ErrorCode {
     SYSTEM_ERROR(50003, "系统内部异常"),
 
     NOT_FOUND_ERROR(404,  "资源不存在"),
+
+    UPLOAD_FAILURE(50010, "文件上传失败"),
+
+    DELETE_FAILURE(50011, "文件删除失败"),
 
 
     ACCOUNT_EXIST(40201, "账号已存在"),
@@ -51,7 +56,7 @@ public enum ErrorCode {
     DATA_USED(40303, "数据已被使用"),
 
 
-;
+    ;
 
     /**
      * 状态码

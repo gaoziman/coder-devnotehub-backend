@@ -1,6 +1,5 @@
 package org.leocoder.devnote.hub.enums;
 
-
 import lombok.Getter;
 
 import java.util.Arrays;
@@ -18,43 +17,45 @@ public enum FileTypeEnum {
 
     // 图片类型
     JPG("jpg", "image/jpeg"),
-
     JPEG("jpeg", "image/jpeg"),
-
     PNG("png", "image/png"),
-
     GIF("gif", "image/gif"),
-
     WEBP("webp", "image/webp"),
-
     HEIC("heic", "image/heic"),
 
     // 文档类型
     PDF("pdf", "application/pdf"),
-
     DOC("doc", "application/msword"),
-
     DOCX("docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
-
     TXT("txt", "text/plain"),
-
     MD("md", "text/markdown"),
 
     // 电子表格
     XLS("xls", "application/vnd.ms-excel"),
-
     XLSX("xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
 
     // 演示文稿
     PPT("ppt", "application/vnd.ms-powerpoint"),
-
     PPTX("pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation"),
+
+    // 视频类型 - 确保这些MIME类型正确定义
+    MP4("mp4", "video/mp4"),
+    AVI("avi", "video/x-msvideo"),
+    MOV("mov", "video/quicktime"),
+    WMV("wmv", "video/x-ms-wmv"),
+    FLV("flv", "video/x-flv"),
+    MKV("mkv", "video/x-matroska"),
+    WEBM("webm", "video/webm"),
+    M4V("m4v", "video/mp4"),
+    TS("ts", "video/mp2t"),
+    MPG("mpg", "video/mpeg"),
+    MPEG("mpeg", "video/mpeg"),
+    _3GP("3gp", "video/3gpp"),
 
     // 默认类型
     UNKNOWN("", "application/octet-stream");
 
     private final String extension;
-
     private final String mimeType;
 
     // 静态映射表，用于快速查找
@@ -131,6 +132,18 @@ public enum FileTypeEnum {
      */
     public static boolean isDocumentExtension(String extension) {
         FileTypeEnum fileType = getByExtension(extension);
-        return fileType != UNKNOWN && !fileType.getMimeType().startsWith("image/");
+        return fileType != UNKNOWN &&
+                !fileType.getMimeType().startsWith("image/") &&
+                !fileType.getMimeType().startsWith("video/");
+    }
+
+    /**
+     * 判断文件扩展名是否为视频类型
+     * @param extension 文件扩展名
+     * @return 是否为视频类型
+     */
+    public static boolean isVideoExtension(String extension) {
+        FileTypeEnum fileType = getByExtension(extension);
+        return fileType.getMimeType().startsWith("video/");
     }
 }

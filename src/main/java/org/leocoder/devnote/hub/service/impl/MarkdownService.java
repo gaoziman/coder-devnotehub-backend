@@ -3,24 +3,28 @@ package org.leocoder.devnote.hub.service.impl;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.leocoder.devnote.hub.domain.vo.file.FileUploadVO;
-import org.springframework.mock.web.MockMultipartFile;
+import org.leocoder.devnote.hub.exception.BusinessException;
+import org.leocoder.devnote.hub.exception.ErrorCode;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.*;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.net.HttpURLConnection;
 import java.net.URL;
-import java.net.URLConnection;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Base64;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
 /**
  * @author : 程序员Leo
  * @version 1.0
  * @date 2025-05-01 04:14
- * @description :
+ * @description : Markdown处理服务
  */
 @Slf4j
 @Service
@@ -28,163 +32,262 @@ import java.util.regex.Pattern;
 public class MarkdownService {
 
     private final FileService fileService;
+    private final RestTemplate restTemplate;
 
-    // Markdown 图片链接正则表达式（支持两种常见格式）
-    private static final Pattern MD_IMAGE_PATTERN = Pattern.compile("!\\[(.*?)\\]\\((.*?)\\)");
-    private static final Pattern HTML_IMAGE_PATTERN = Pattern.compile("<img\\s+[^>]*src=[\"']([^\"']+)[\"'][^>]*>");
+    // Base64编码图片的正则表达式模式
+    private static final Pattern BASE64_IMAGE_PATTERN =
+            Pattern.compile("!\\[(.*?)\\]\\(data:image/(.*?);base64,(.*?)\\)");
+
+    // 外部URL图片的正则表达式模式 - 包含HTTP/HTTPS链接
+    private static final Pattern URL_IMAGE_PATTERN =
+            Pattern.compile("!\\[(.*?)\\]\\((https?://.*?\\.(png|jpg|jpeg|gif|webp|bmp))\\)");
+
+    // 匹配形如 ![Image-20240202095614159](https://gaoziman.oss-cn-hangzhou.aliyuncs.com/LeoPic20240202095654.png) 的模式
+    private static final Pattern SPECIAL_IMAGE_PATTERN =
+            Pattern.compile("!\\[(Image-\\d+)\\]\\((https?://.*?\\.(png|jpg|jpeg|gif|webp|bmp))\\)");
 
     /**
-     * 处理 Markdown 文件中的图片：提取、下载、上传到 MinIO 并替换 URL
+     * 处理Markdown文件并上传
      *
-     * @param markdownContent 原始 Markdown 内容
-     * @return 处理后的 Markdown 内容（图片 URL 已更新）
+     * @param file Markdown文件
+     * @return 上传后的文件信息
      */
-    public String processMarkdownImages(String markdownContent) {
-        // 提取所有图片 URL
-        List<String> imageUrls = extractImageUrls(markdownContent);
+    public FileUploadVO processAndUploadMarkdown(MultipartFile file) {
+        try {
+            // 强制使用UTF-8读取文件内容，避免编码检测可能导致的问题
+            String content = new String(file.getBytes(), StandardCharsets.UTF_8);
+            log.info("成功读取Markdown文件，大小: {}", content.length());
 
-        if (imageUrls.isEmpty()) {
-            log.info("Markdown 中未找到图片");
-            return markdownContent;
-        }
+            // 处理Markdown中的图片
+            String processedContent = processMarkdownImages(content);
+            log.info("处理完成，处理后内容大小: {}", processedContent.length());
 
-        log.info("在 Markdown 中找到 {} 个图片", imageUrls.size());
+            // 将处理后的内容转为字节数组，使用UTF-8编码
+            byte[] processedBytes = processedContent.getBytes(StandardCharsets.UTF_8);
 
-        // 处理每个图片
-        for (String imageUrl : imageUrls) {
-            try {
-                // 过滤掉已经是系统内部 URL 的图片
-                if (imageUrl.contains(fileService.getMinioEndpoint())) {
-                    log.info("图片已在 MinIO 中，跳过处理: {}", imageUrl);
-                    continue;
-                }
+            // 准备上传参数
+            String fileName = file.getOriginalFilename();
+            ByteArrayInputStream inputStream = new ByteArrayInputStream(processedBytes);
 
-                // 下载并上传图片
-                FileUploadVO uploadedImage = downloadAndUploadImage(imageUrl);
-
-                // 在 Markdown 中替换旧 URL 为新 URL
-                markdownContent = replaceImageUrl(markdownContent, imageUrl, uploadedImage.getUrl());
-
-                log.info("已替换图片 URL: {} -> {}", imageUrl, uploadedImage.getUrl());
-            } catch (Exception e) {
-                log.error("处理图片失败: {}, 错误: {}", imageUrl, e.getMessage());
-                // 即使某个图片处理失败，也继续处理其他图片
-            }
-        }
-
-        return markdownContent;
-    }
-
-    /**
-     * 从 Markdown 内容中提取所有图片 URL
-     */
-    private List<String> extractImageUrls(String markdownContent) {
-        List<String> urls = new ArrayList<>();
-
-        // 匹配 Markdown 风格图片链接: ![alt](url)
-        Matcher mdMatcher = MD_IMAGE_PATTERN.matcher(markdownContent);
-        while (mdMatcher.find()) {
-            urls.add(mdMatcher.group(2));
-        }
-
-        // 匹配 HTML 风格图片标签: <img src="url" />
-        Matcher htmlMatcher = HTML_IMAGE_PATTERN.matcher(markdownContent);
-        while (htmlMatcher.find()) {
-            urls.add(htmlMatcher.group(1));
-        }
-
-        return urls;
-    }
-
-    /**
-     * 从 URL 下载图片并上传到 MinIO
-     */
-    private FileUploadVO downloadAndUploadImage(String imageUrl) throws IOException {
-        // 下载图片
-        URL url = new URL(imageUrl);
-        URLConnection connection = url.openConnection();
-        // 设置请求头，避免某些站点的访问限制
-        connection.setRequestProperty("User-Agent", "Mozilla/5.0");
-
-        // 确定文件类型和名称
-        String contentType = connection.getContentType();
-        String filename = getFilenameFromUrl(imageUrl, contentType);
-
-        try (InputStream inputStream = connection.getInputStream()) {
-            // 读取图片数据
-            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-            byte[] buffer = new byte[4096];
-            int bytesRead;
-            while ((bytesRead = inputStream.read(buffer)) != -1) {
-                outputStream.write(buffer, 0, bytesRead);
-            }
-
-            // 创建 MultipartFile 对象
-            MultipartFile multipartFile = new MockMultipartFile(
-                    filename,
-                    filename,
-                    contentType,
-                    outputStream.toByteArray()
+            // 上传处理后的Markdown文件
+            return fileService.uploadFile(
+                    inputStream,
+                    fileName,
+                    "text/markdown; charset=utf-8", // 明确指定MIME类型和字符集
+                    processedBytes.length
             );
 
-            // 上传到 MinIO
-            return fileService.uploadFile(multipartFile, "images");
+        } catch (IOException e) {
+            log.error("处理Markdown文件失败: {}", e.getMessage(), e);
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "处理Markdown文件失败: " + e.getMessage());
         }
     }
 
     /**
-     * 从图片 URL 中提取文件名
+     * 处理Markdown中的图片
+     *
+     * @param content Markdown内容
+     * @return 处理后的Markdown内容
      */
-    private String getFilenameFromUrl(String imageUrl, String contentType) {
-        // 尝试从 URL 提取文件名
-        String filename = imageUrl.substring(imageUrl.lastIndexOf('/') + 1);
+    private String processMarkdownImages(String content) {
+        // 依次处理不同类型的图片
+        String result = processBase64Images(content);
+        result = processURLImages(result);
+        result = processSpecialImages(result);
 
-        // 移除查询参数
-        if (filename.contains("?")) {
-            filename = filename.substring(0, filename.indexOf('?'));
-        }
+        return result;
+    }
 
-        // 如果文件名为空或没有扩展名，生成一个新的
-        if (filename.isEmpty() || !filename.contains(".")) {
-            String extension = ".jpg"; // 默认扩展名
+    /**
+     * 处理Base64编码的图片
+     */
+    private String processBase64Images(String content) {
+        Matcher matcher = BASE64_IMAGE_PATTERN.matcher(content);
+        StringBuffer sb = new StringBuffer();
 
-            // 根据内容类型确定扩展名
-            if (contentType != null) {
-                if (contentType.contains("png")) {
-                    extension = ".png";
-                } else if (contentType.contains("gif")) {
-                    extension = ".gif";
-                } else if (contentType.contains("jpeg") || contentType.contains("jpg")) {
-                    extension = ".jpg";
-                } else if (contentType.contains("webp")) {
-                    extension = ".webp";
-                }
+        while (matcher.find()) {
+            String altText = matcher.group(1);
+            String imageType = matcher.group(2);
+            String base64Data = matcher.group(3);
+
+            try {
+                // 解码Base64数据
+                byte[] imageData = Base64.getDecoder().decode(base64Data);
+
+                // 生成临时文件名
+                String fileName = UUID.randomUUID().toString() + "." + imageType;
+
+                // 上传到MinIO
+                ByteArrayInputStream inputStream = new ByteArrayInputStream(imageData);
+                FileUploadVO uploadResult = fileService.uploadFile(
+                        inputStream,
+                        fileName,
+                        "image/" + imageType,
+                        imageData.length
+                );
+
+                // 替换Markdown中的图片引用
+                matcher.appendReplacement(sb, "![" + altText + "](" + uploadResult.getUrl() + ")");
+                log.info("Base64图片已替换为: {}", uploadResult.getUrl());
+
+            } catch (Exception e) {
+                log.error("处理Base64图片失败: {}", e.getMessage(), e);
+                // 如果处理失败，保留原始内容
+                matcher.appendReplacement(sb, matcher.group(0));
             }
-
-            // 生成随机文件名
-            filename = UUID.randomUUID().toString().replace("-", "") + extension;
         }
 
-        return filename;
+        matcher.appendTail(sb);
+        return sb.toString();
     }
 
     /**
-     * 在 Markdown 内容中替换图片 URL
+     * 处理外部URL图片
      */
-    private String replaceImageUrl(String markdownContent, String oldUrl, String newUrl) {
-        // 转义 URL 中的特殊字符，避免正则表达式问题
-        String escapedOldUrl = oldUrl.replaceAll("([\\\\*+\\[\\](){}\\|^$.?])", "\\\\$1");
+    private String processURLImages(String content) {
+        Matcher matcher = URL_IMAGE_PATTERN.matcher(content);
+        StringBuffer sb = new StringBuffer();
 
-        // 替换 Markdown 格式中的 URL
-        String updated = markdownContent.replaceAll(
-                "!\\[(.*?)\\]\\(" + escapedOldUrl + "\\)",
-                "![$1](" + newUrl + ")"
-        );
+        while (matcher.find()) {
+            String altText = matcher.group(1);
+            String imageUrl = matcher.group(2);
+            String extension = matcher.group(3).toLowerCase();
 
-        // 替换 HTML 格式中的 URL
-        return updated.replaceAll(
-                "<img\\s+([^>]*)src=[\"']" + escapedOldUrl + "[\"']([^>]*)>",
-                "<img $1src=\"" + newUrl + "\"$2>"
-        );
+            try {
+                // 下载图片
+                log.info("开始下载图片: {}", imageUrl);
+                byte[] imageData = downloadImage(imageUrl);
+
+                if (imageData != null && imageData.length > 0) {
+                    // 生成文件名
+                    String fileName = UUID.randomUUID().toString() + "." + extension;
+
+                    // 上传到MinIO
+                    ByteArrayInputStream inputStream = new ByteArrayInputStream(imageData);
+                    FileUploadVO uploadResult = fileService.uploadFile(
+                            inputStream,
+                            fileName,
+                            "image/" + getContentTypeByExtension(extension),
+                            imageData.length
+                    );
+
+                    // 替换Markdown中的图片引用
+                    matcher.appendReplacement(sb, "![" + altText + "](" + uploadResult.getUrl() + ")");
+                    log.info("外部URL图片已替换为: {}", uploadResult.getUrl());
+                } else {
+                    // 如果下载失败，保留原始内容
+                    matcher.appendReplacement(sb, matcher.group(0));
+                    log.warn("无法下载图片: {}", imageUrl);
+                }
+            } catch (Exception e) {
+                log.error("处理URL图片失败: {}, 错误: {}", imageUrl, e.getMessage(), e);
+                // 如果处理失败，保留原始内容
+                matcher.appendReplacement(sb, matcher.group(0));
+            }
+        }
+
+        matcher.appendTail(sb);
+        return sb.toString();
+    }
+
+    /**
+     * 处理特殊形式的图片（例如截图中的格式）
+     */
+    private String processSpecialImages(String content) {
+        Matcher matcher = SPECIAL_IMAGE_PATTERN.matcher(content);
+        StringBuffer sb = new StringBuffer();
+
+        while (matcher.find()) {
+            String altText = matcher.group(1);
+            String imageUrl = matcher.group(2);
+            String extension = matcher.group(3).toLowerCase();
+
+            try {
+                // 下载图片
+                log.info("开始下载特殊格式图片: {}", imageUrl);
+                byte[] imageData = downloadImage(imageUrl);
+
+                if (imageData != null && imageData.length > 0) {
+                    // 生成文件名，保留原始文件名的特殊格式
+                    String fileName = altText + "." + extension;
+
+                    // 上传到MinIO
+                    ByteArrayInputStream inputStream = new ByteArrayInputStream(imageData);
+                    FileUploadVO uploadResult = fileService.uploadFile(
+                            inputStream,
+                            fileName,
+                            "image/" + getContentTypeByExtension(extension),
+                            imageData.length
+                    );
+
+                    // 替换Markdown中的图片引用
+                    matcher.appendReplacement(sb, "![" + altText + "](" + uploadResult.getUrl() + ")");
+                    log.info("特殊格式图片已替换为: {}", uploadResult.getUrl());
+                } else {
+                    // 如果下载失败，保留原始内容
+                    matcher.appendReplacement(sb, matcher.group(0));
+                    log.warn("无法下载特殊格式图片: {}", imageUrl);
+                }
+            } catch (Exception e) {
+                log.error("处理特殊格式图片失败: {}, 错误: {}", imageUrl, e.getMessage(), e);
+                // 如果处理失败，保留原始内容
+                matcher.appendReplacement(sb, matcher.group(0));
+            }
+        }
+
+        matcher.appendTail(sb);
+        return sb.toString();
+    }
+
+    /**
+     * 下载图片
+     *
+     * @param imageUrl 图片URL
+     * @return 图片字节数组
+     */
+    private byte[] downloadImage(String imageUrl) {
+        try {
+            URL url = new URL(imageUrl);
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("GET");
+            connection.setRequestProperty("User-Agent", "Mozilla/5.0");
+            connection.setConnectTimeout(5000);
+            connection.setReadTimeout(5000);
+
+            int responseCode = connection.getResponseCode();
+            if (responseCode == HttpStatus.OK.value()) {
+                // 读取图片数据
+                try (ByteArrayInputStream bis = new ByteArrayInputStream(connection.getInputStream().readAllBytes())) {
+                    return bis.readAllBytes();
+                }
+            } else {
+                log.error("下载图片失败, HTTP状态码: {}", responseCode);
+                return null;
+            }
+        } catch (Exception e) {
+            log.error("下载图片出错: {}", e.getMessage(), e);
+            return null;
+        }
+    }
+
+    /**
+     * 根据扩展名获取内容类型
+     */
+    private String getContentTypeByExtension(String extension) {
+        switch (extension.toLowerCase()) {
+            case "jpg":
+            case "jpeg":
+                return "jpeg";
+            case "png":
+                return "png";
+            case "gif":
+                return "gif";
+            case "webp":
+                return "webp";
+            case "bmp":
+                return "bmp";
+            default:
+                return "jpeg"; // 默认类型
+        }
     }
 }
