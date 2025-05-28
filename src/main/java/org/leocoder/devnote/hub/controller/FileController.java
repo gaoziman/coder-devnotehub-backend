@@ -29,12 +29,12 @@ import org.springframework.web.multipart.MultipartFile;
 public class FileController {
 
     private final FileService fileService;
+
     private final MarkdownService markdownService;
 
     @ApiOperation("上传图片")
     @PostMapping(value = "/upload/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public Result<FileUploadVO> uploadImage(@RequestParam("file") MultipartFile file) {
-        log.info("上传图片: {}, 大小: {}", file.getOriginalFilename(), file.getSize());
         FileUploadVO result = fileService.uploadImage(file);
         return ResultUtils.success(result);
     }
@@ -42,23 +42,13 @@ public class FileController {
     @ApiOperation("上传文档")
     @PostMapping(value = "/upload/document", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public Result<FileUploadVO> uploadDocument(@RequestParam("file") MultipartFile file) {
-        log.info("上传文档: {}, 大小: {}", file.getOriginalFilename(), file.getSize());
         FileUploadVO result = fileService.uploadDocument(file);
-        return ResultUtils.success(result);
-    }
-
-    @ApiOperation("上传视频")
-    @PostMapping(value = "/upload/video", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public Result<FileUploadVO> uploadVideo(@RequestParam("file") MultipartFile file) {
-        log.info("上传视频: {}, 大小: {}", file.getOriginalFilename(), file.getSize());
-        FileUploadVO result = fileService.uploadVideo(file);
         return ResultUtils.success(result);
     }
 
     @ApiOperation("上传Markdown文件")
     @PostMapping(value = "/upload/markdown", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public Result<FileUploadVO> uploadMarkdown(@RequestParam("file") MultipartFile file) {
-        log.info("上传Markdown文件: {}, 大小: {}", file.getOriginalFilename(), file.getSize());
 
         // 验证文件扩展名
         String extension = getFileExtension(file.getOriginalFilename());
@@ -74,7 +64,6 @@ public class FileController {
     @ApiOperation("删除文件")
     @DeleteMapping("")
     public Result<Boolean> deleteFile(@RequestParam("objectName") String objectName) {
-        log.info("删除文件: {}", objectName);
         boolean result = fileService.deleteFile(objectName);
         return ResultUtils.success(result);
     }
@@ -82,7 +71,6 @@ public class FileController {
     @ApiOperation("检查文件是否存在")
     @GetMapping("/exists")
     public Result<Boolean> isFileExist(@RequestParam("objectName") String objectName) {
-        log.info("检查文件是否存在: {}", objectName);
         boolean exists = fileService.isFileExist(objectName);
         return ResultUtils.success(exists);
     }

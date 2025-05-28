@@ -39,13 +39,6 @@ public interface FileService {
      */
     FileUploadVO uploadDocument(MultipartFile file);
 
-    /**
-     * 上传视频
-     *
-     * @param file 视频文件
-     * @return 文件上传响应对象
-     */
-    FileUploadVO uploadVideo(MultipartFile file);
 
     /**
      * 通过InputStream上传文件

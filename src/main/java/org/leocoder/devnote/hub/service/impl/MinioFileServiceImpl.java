@@ -152,29 +152,6 @@ public class MinioFileServiceImpl implements FileService {
     }
 
 
-    /**
-     * 上传视频
-     *
-     * @param file 视频文件
-     * @return 文件上传响应对象
-     */
-    @Override
-    public FileUploadVO uploadVideo(MultipartFile file) {
-        // 获取文件扩展名
-        String extension = getFileExtension(file.getOriginalFilename());
-
-        // 验证是否为允许的视频类型
-        if (!minioConfig.getAllowedVideoExtensionList().contains(extension.toLowerCase())) {
-            throw new BusinessException(ErrorCode.PARAMETER_ERROR, "不支持的视频类型: " + extension);
-        }
-
-        // 获取视频的MIME类型
-        String mimeType = FileTypeEnum.getMimeTypeByExtension(extension);
-
-        // 调用通用上传方法
-        return uploadFile(file, mimeType);
-    }
-
 
     /**
      * 通过InputStream上传文件
